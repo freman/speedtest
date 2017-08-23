@@ -27,9 +27,9 @@ func main() {
 	fmt.Printf("Found %v with %v latency\n", server, server.TestLatency())
 
 	fmt.Println("Downloading...")
-	fmt.Printf("  - %0.2fmbit/s", server.TestDownload())
+	fmt.Printf("  - %0.2fmbit/s\n", server.TestDownload())
 
 	fmt.Println("Uploading...")
-	fmt.Printf("  - %0.2fmbit/s", server.TestUpload())
+	fmt.Printf("  - %0.2fmbit/s\n", server.TestUpload())
 
 }
