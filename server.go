@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -139,7 +140,7 @@ func (x Server) TestUpload() (speed float64) {
 	inch := make(chan int, threads)
 	defer close(inch)
 
-	ouch := make(chan int, requests)
+	ouch := make(chan int64, requests)
 	defer close(ouch)
 
 	timeout := time.Duration(pc.Upload.TestLength) * time.Second
@@ -151,11 +152,13 @@ func (x Server) TestUpload() (speed float64) {
 			cc.Logger.Debugf("\t[%d] waiting", thread)
 			for size := range inch {
 				cc.Logger.Debugf("\t[%d] uploading %d bytes", thread, size)
-				_, err := c.discardRequest(ctx, http.MethodPost, x.URL.URL, bytes.NewReader(buf[:size]))
+				reader := bytes.NewReader(buf[:size])
+				_, err := c.discardRequest(ctx, http.MethodPost, x.URL.URL, reader)
 				if err != nil && err != context.DeadlineExceeded {
 					cc.Logger.Warnf("unable to upload to server: %v", err)
 				}
-				ouch <- size
+				read, _ := reader.Seek(0, io.SeekCurrent)
+				ouch <- read
 				cc.Logger.Debugf("\t[%d] uploaded %d", thread, size)
 			}
 			cc.Logger.Debugf("\t[%d] shutting down", thread)
@@ -178,7 +181,7 @@ func (x Server) TestUpload() (speed float64) {
 		}
 	}()
 
-	size := 0
+	size := int64(0)
 	for i := 0; i < requests; i++ {
 		size += <-ouch
 	}
