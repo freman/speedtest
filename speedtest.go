@@ -1,6 +1,7 @@
 package speedtest
 
 import (
+	"context"
 	"encoding/xml"
 	"io"
 	"io/ioutil"
@@ -38,11 +39,12 @@ func (c *Client) Options(options ...Option) {
 	}
 }
 
-func (c *Client) doRequest(method string, u *url.URL, body io.Reader) (*http.Response, error) {
+func (c *Client) doRequest(ctx context.Context, method string, u *url.URL, body io.Reader) (*http.Response, error) {
 	req, err := http.NewRequest(method, makeURLRandom(u).String(), body)
 	if err != nil {
 		return nil, err
 	}
+	req = req.WithContext(ctx)
 
 	req.Header.Set("Cache-Control", "no-cache")
 	req.Header.Set("User-Agent", c.config.UserAgent)
@@ -50,8 +52,8 @@ func (c *Client) doRequest(method string, u *url.URL, body io.Reader) (*http.Res
 	return c.config.HTTPClient.Do(req)
 }
 
-func (c *Client) discardRequest(method string, u *url.URL, body io.Reader) (int64, error) {
-	resp, err := c.doRequest(method, u, body)
+func (c *Client) discardRequest(ctx context.Context, method string, u *url.URL, body io.Reader) (int64, error) {
+	resp, err := c.doRequest(ctx, method, u, body)
 	if err != nil {
 		return 0, err
 	}
@@ -59,8 +61,8 @@ func (c *Client) discardRequest(method string, u *url.URL, body io.Reader) (int6
 	return io.Copy(ioutil.Discard, resp.Body)
 }
 
-func (c *Client) getXMLObject(u *url.URL, v interface{}) error {
-	resp, err := c.doRequest(http.MethodGet, u, nil)
+func (c *Client) getXMLObject(ctx context.Context, u *url.URL, v interface{}) error {
+	resp, err := c.doRequest(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return err
 	}
@@ -77,7 +79,7 @@ func (c *Client) getXMLObject(u *url.URL, v interface{}) error {
 func (c *Client) GetPlatformConfig() (*PlatformConfig, error) {
 	if c.platform == nil {
 		c.platform = &PlatformConfig{}
-		if err := c.getXMLObject(c.config.PlatformConfigURL, c.platform); err != nil {
+		if err := c.getXMLObject(context.Background(), c.config.PlatformConfigURL, c.platform); err != nil {
 			return nil, err
 		}
 	}
@@ -91,7 +93,7 @@ func (c *Client) GetServerList() (ServerList, error) {
 	}
 
 	list := &rawXMLServerList{}
-	if err := c.getXMLObject(c.config.ServerListURL, list); err != nil {
+	if err := c.getXMLObject(context.Background(), c.config.ServerListURL, list); err != nil {
 		return nil, err
 	}
 

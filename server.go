@@ -2,6 +2,7 @@ package speedtest
 
 import (
 	"bytes"
+	"context"
 	"encoding/xml"
 	"fmt"
 	"net/http"
@@ -42,7 +43,7 @@ func (x *Server) TestLatency() (latency time.Duration) {
 	for i := 0; i < 3; i++ {
 		start := time.Now()
 
-		_, err := x.client.discardRequest(http.MethodGet, x.LatencyURL(), nil)
+		_, err := x.client.discardRequest(context.Background(), http.MethodGet, x.LatencyURL(), nil)
 		if err != nil {
 			if i == 0 {
 				x.client.config.Logger.Warnf("failed to poll server %v due to %v", x, err)
@@ -74,15 +75,18 @@ func (x Server) TestDownload() (speed float64) {
 	ouch := make(chan int64, requests)
 	defer close(ouch)
 
+	timeout := time.Duration(pc.Download.TestLength) * time.Second
+	ctx, cf := context.WithDeadline(context.Background(), time.Now().Add(timeout))
+	defer cf()
+
 	for i := 0; i < threads; i++ {
 		go func(thread int) {
 			cc.Logger.Debugf("\t[%d] waiting", thread)
 			for url := range inch {
 				cc.Logger.Debugf("\t[%d] downloading %s", thread, url)
-				size, err := c.discardRequest(http.MethodGet, url, nil)
-				if err != nil {
+				size, err := c.discardRequest(ctx, http.MethodGet, url, nil)
+				if err != nil && err != context.DeadlineExceeded {
 					cc.Logger.Warnf("unable to download from server: %v", err)
-					ouch <- 0
 				}
 				ouch <- size
 				cc.Logger.Debugf("\t[%d] downloaded %d", thread, size)
@@ -94,6 +98,7 @@ func (x Server) TestDownload() (speed float64) {
 	cc.Logger.Debugf("launching queuer thread for %d requests", requests)
 
 	start := time.Now()
+
 	go func() {
 		for _, size := range cc.DownloadSizes {
 			for i := 0; i < pc.Download.ThreadsPerURL; i++ {
@@ -137,15 +142,18 @@ func (x Server) TestUpload() (speed float64) {
 	ouch := make(chan int, requests)
 	defer close(ouch)
 
+	timeout := time.Duration(pc.Upload.TestLength) * time.Second
+	ctx, cf := context.WithDeadline(context.Background(), time.Now().Add(timeout))
+	defer cf()
+
 	for i := 0; i < threads; i++ {
 		go func(thread int) {
 			cc.Logger.Debugf("\t[%d] waiting", thread)
 			for size := range inch {
 				cc.Logger.Debugf("\t[%d] uploading %d bytes", thread, size)
-				_, err := c.discardRequest(http.MethodPost, x.URL.URL, bytes.NewReader(buf[:size]))
-				if err != nil {
+				_, err := c.discardRequest(ctx, http.MethodPost, x.URL.URL, bytes.NewReader(buf[:size]))
+				if err != nil && err != context.DeadlineExceeded {
 					cc.Logger.Warnf("unable to upload to server: %v", err)
-					ouch <- 0
 				}
 				ouch <- size
 				cc.Logger.Debugf("\t[%d] uploaded %d", thread, size)
