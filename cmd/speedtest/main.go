@@ -56,6 +56,9 @@ func main() {
 	c := speedtest.NewClient(options...)
 	fmt.Println("Getting platform config")
 	pc, err := c.GetPlatformConfig()
+	if err != nil {
+		panic(err)
+	}
 	fmt.Println("Testing from:", pc.Client.IP)
 	fmt.Println("Getting server list")
 	sl, err := c.GetServerList()
